@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Field.js Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; min-height: 100vh; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .card { background: white; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card h2 { margin-bottom: 16px; color: #333; }
+    .counter { text-align: center; }
+    .counter-value { font-size: 48px; font-weight: bold; color: #4a90d9; margin: 20px 0; }
+    .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; margin: 0 4px; }
+    .btn-primary { background: #4a90d9; color: white; }
+    .btn-primary:hover { background: #357abd; }
+    .btn-secondary { background: #f0f0f0; color: #333; }
+    .todo-list { list-style: none; padding: 0; }
+    .todo-item { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+    .todo-item.completed span { text-decoration: line-through; color: #999; }
+    .todo-item .delete { margin-left: auto; color: #e74c3c; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="module">
+// ========== Framework Code (Inlined) ==========
+
+let activeEffect = null
+const effectStack = []
+const subscriberMap = new WeakMap()
+
+function getSubscribers(target, key) {
+  let targetMap = subscriberMap.get(target)
+  if (!targetMap) { targetMap = new Map(); subscriberMap.set(target, targetMap) }
+  let subs = targetMap.get(key)
+  if (!subs) { subs = new Set(); targetMap.set(key, subs) }
+  return subs
+}
+
+function track(target, key) {
+  if (!activeEffect) return
+  getSubscribers(target, key).add(activeEffect)
+}
+
+function trigger(target, key) {
+  const targetMap = subscriberMap.get(target)
+  if (!targetMap) return
+  const subs = targetMap.get(key)
+  if (!subs) return
+  subs.forEach(sub => sub())
+}
+
+function signal(initialValue) {
+  const target = { value: initialValue }
+  const proxy = new Proxy(target, {
+    get(obj, key) {
+      if (key === 'value') { track(obj, key); return obj.value }
+      return Reflect.get(obj, key)
+    },
+    set(obj, key, value) {
+      if (key === 'value') { obj.value = value; trigger(obj, key); return true }
+      return Reflect.set(obj, key, value)
+    }
+  })
+  const signalFn = function() { return proxy.value }
+  signalFn.set = function(value) { proxy.value = value }
+  signalFn.update = function(fn) { proxy.value = fn(proxy.value) }
+  return signalFn
+}
+
+function effect(fn) {
+  const execute = () => {
+    if (effectStack.includes(execute)) return
+    const prevEffect = activeEffect
+    activeEffect = execute
+    effectStack.push(execute)
+    try { fn() } finally { effectStack.pop(); activeEffect = prevEffect }
+  }
+  execute()
+  return () => { subscriberMap.forEach(targetMap => targetMap.forEach(subs => subs.delete(execute))) }
+}
+
+const storeRegistry = new Map()
+
+function defineStore(id, options) {
+  return () => {
+    if (storeRegistry.has(id)) return storeRegistry.get(id)
+    const initialState = options.state ? JSON.parse(JSON.stringify(options.state)) : {}
+    const $state = signal(options.state || {})
+    const state = new Proxy(options.state || {}, {
+      get(target, key) { return $state()[key] },
+      set(target, key, value) { $state.update(s => ({ ...s, [key]: value })); return true }
+    })
+    const store = { state, $state, $reset: () => $state.set(JSON.parse(JSON.stringify(initialState))) }
+    if (options.actions) Object.keys(options.actions).forEach(key => { store[key] = (...args) => options.actions[key].call(store, ...args) })
+    if (options.getters) Object.keys(options.getters).forEach(key => { Object.defineProperty(store, key, { get() { return options.getters[key].call(store) } }) })
+    storeRegistry.set(id, store)
+    return store
+  }
+}
+
+function h(tag, props = {}, ...children) {
+  if (typeof tag === 'function') return tag(props, children.flat())
+  if (!props) props = {}
+  const element = document.createElement(tag)
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'className') {
+      if (typeof value === 'function') {
+        const update = () => { element.className = value() ?? '' }
+        update()
+        effect(update)
+      } else {
+        element.className = value
+      }
+    } else if (key === 'style' && typeof value === 'object') Object.assign(element.style, value)
+    else if (key.startsWith('on') && typeof value === 'function') element.addEventListener(key.slice(2).toLowerCase(), value)
+    else if (typeof value === 'function') {
+      const apply = () => {
+        const result = value()
+        if (key === 'value') element.value = result ?? ''
+        else if (result !== null && result !== undefined) element.setAttribute(key, result)
+        else element.removeAttribute(key)
+      }
+      apply()
+      effect(apply)
+    }
+    else if (value !== null && value !== undefined) element.setAttribute(key, value)
+  }
+  children.flat().forEach(child => {
+    if (child instanceof Node) element.appendChild(child)
+    else if (Array.isArray(child)) child.forEach(c => { if (c instanceof Node) element.appendChild(c) })
+    else if (typeof child === 'function') {
+      const textNode = document.createTextNode(String(child()))
+      element.appendChild(textNode)
+      effect(() => { textNode.textContent = String(child()) })
+    }
+    else if (child !== null && child !== undefined) element.appendChild(document.createTextNode(String(child)))
+  })
+  return element
+}
+
+function each(list, render) {
+  const frag = document.createDocumentFragment()
+  if (typeof list === 'function') {
+    const container = document.createDocumentFragment()
+    frag.appendChild(container)
+    let currentNodes = []
+    const update = () => {
+      currentNodes.forEach(n => n.remove())
+      currentNodes = []
+      list().forEach((item, index) => { const node = render(item, index); container.appendChild(node); currentNodes.push(node) })
+    }
+    effect(update)
+  } else if (Array.isArray(list)) {
+    list.forEach((item, index) => {
+      frag.appendChild(render(item, index))
+    })
+  }
+  return frag
+}
+
+function render(component, container) {
+  container.innerHTML = ''
+  if (component instanceof Node) container.appendChild(component)
+}
+
+function createApp(rootComponent, container) {
+  const target = typeof container === 'string' ? document.querySelector(container) : container
+  if (!target) throw new Error('Container not found')
+  const element = rootComponent({}, [])
+  render(element, target)
+}
+
+// ========== Application Code ==========
+
+const useCounterStore = defineStore('counter', {
+  state: { count: 0 },
+  actions: {
+    increment() { this.state.count++ },
+    decrement() { this.state.count-- },
+    reset() { this.state.count = 0 }
+  },
+  getters: {
+    doubleCount() { return this.state.count * 2 }
+  }
+})
+
+function CounterApp() {
+  const counter = useCounterStore()
+  return h('div', { className: 'card' },
+    h('h2', null, '计数器示例'),
+    h('div', { className: 'counter' },
+      h('div', { className: 'counter-value' }, () => String(counter.state.count)),
+      h('p', null, '双倍值: ', () => String(counter.doubleCount)),
+      h('div', null,
+        h('button', { className: 'btn btn-secondary', onClick: () => counter.decrement() }, '-'),
+        h('button', { className: 'btn btn-primary', onClick: () => counter.reset() }, '重置'),
+        h('button', { className: 'btn btn-secondary', onClick: () => counter.increment() }, '+')
+      )
+    )
+  )
+}
+
+createApp(CounterApp, '#app')
+
+console.log('Field.js Demo loaded successfully!')
+  </script>
+</body>
+</html>

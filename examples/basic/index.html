@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rock.js 示例应用</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .card h2 {
+      margin-bottom: 16px;
+      color: #333;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #555;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: #4a90d9;
+      box-shadow: 0 0 0 3px rgba(74,144,217,0.1);
+    }
+    
+    .form-group input.error {
+      border-color: #e74c3c;
+    }
+    
+    .error-message {
+      color: #e74c3c;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #4a90d9;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #357abd;
+    }
+    
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+    
+    .todo-list {
+      list-style: none;
+    }
+    
+    .todo-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .todo-item:last-child {
+      border-bottom: none;
+    }
+    
+    .todo-item input[type="checkbox"] {
+      margin-right: 12px;
+    }
+    
+    .todo-item.completed span {
+      text-decoration: line-through;
+      color: #999;
+    }
+    
+    .todo-item .delete-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: #e74c3c;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    
+    .counter {
+      text-align: center;
+    }
+    
+    .counter-value {
+      font-size: 48px;
+      font-weight: bold;
+      color: #4a90d9;
+      margin: 20px 0;
+    }
+    
+    .counter-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    
+    .nav {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .nav a {
+      padding: 8px 16px;
+      text-decoration: none;
+      color: #666;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    
+    .nav a:hover {
+      background: #e0e0e0;
+    }
+    
+    .nav a.active {
+      background: #4a90d9;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  
+  <script type="module">
+    import {
+      signal, computed, effect, reactive, watch,
+      createField, createForm, validators,
+      h, render, createApp, fragment, show, each,
+      createStore, defineStore, useStore
+    } from '../../packages/core/index.js'
+    
+    const useCounterStore = defineStore('counter', {
+      state: {
+        count: 0,
+        history: []
+      },
+      actions: {
+        increment() {
+          this.state.count++
+          this.state.history.push({ type: 'increment', value: this.state.count, time: Date.now() })
+        },
+        decrement() {
+          this.state.count--
+          this.state.history.push({ type: 'decrement', value: this.state.count, time: Date.now() })
+        },
+        reset() {
+          this.state.count = 0
+          this.state.history = []
+        }
+      },
+      getters: {
+        doubleCount() {
+          return this.state.count * 2
+        },
+        historyCount() {
+          return this.state.history.length
+        }
+      }
+    })
+    
+    const useTodoStore = defineStore('todos', {
+      state: {
+        items: [],
+        filter: 'all'
+      },
+      actions: {
+        add(text) {
+          this.state.items.push({
+            id: Date.now(),
+            text,
+            completed: false
+          })
+        },
+        toggle(id) {
+          const item = this.state.items.find(i => i.id === id)
+          if (item) {
+            item.completed = !item.completed
+          }
+        },
+        remove(id) {
+          const index = this.state.items.findIndex(i => i.id === id)
+          if (index > -1) {
+            this.state.items.splice(index, 1)
+          }
+        },
+        setFilter(filter) {
+          this.state.filter = filter
+        }
+      },
+      getters: {
+        filteredItems() {
+          const { items, filter } = this.state
+          if (filter === 'active') return items.filter(i => !i.completed)
+          if (filter === 'completed') return items.filter(i => i.completed)
+          return items
+        },
+        activeCount() {
+          return this.state.items.filter(i => !i.completed).length
+        },
+        completedCount() {
+          return this.state.items.filter(i => i.completed).length
+        }
+      }
+    })
+    
+    function CounterApp() {
+      const counter = useCounterStore()
+      
+      return h('div', { className: 'card' },
+        h('h2', null, '计数器示例'),
+        h('div', { className: 'counter' },
+          h('div', { className: 'counter-value' }, () => String(counter.state.count)),
+          h('p', null, '双倍值: ', () => String(counter.doubleCount)),
+          h('p', null, '操作历史: ', () => String(counter.historyCount), ' 次'),
+          h('div', { className: 'counter-buttons' },
+            h('button', { className: 'btn btn-secondary', onClick: () => counter.decrement() }, '-'),
+            h('button', { className: 'btn btn-primary', onClick: () => counter.reset() }, '重置'),
+            h('button', { className: 'btn btn-secondary', onClick: () => counter.increment() }, '+')
+          )
+        )
+      )
+    }
+    
+    function TodoApp() {
+      const todo = useTodoStore()
+      const inputRef = { current: null }
+      const newTodoText = signal('')
+      
+      const handleSubmit = (e) => {
+        e.preventDefault()
+        const text = newTodoText().trim()
+        if (text) {
+          todo.add(text)
+          newTodoText.set('')
+        }
+      }
+      
+      return h('div', { className: 'card' },
+        h('h2', null, '待办事项示例'),
+        h('form', { onSubmit: handleSubmit },
+          h('div', { className: 'form-group', style: { display: 'flex', gap: '10px' } },
+            h('input', {
+              type: 'text',
+              placeholder: '添加新待办...',
+              value: newTodoText,
+              onInput: (e) => newTodoText.set(e.target.value),
+              style: { flex: 1 }
+            }),
+            h('button', { type: 'submit', className: 'btn btn-primary' }, '添加')
+          )
+        ),
+        h('div', { style: { margin: '16px 0' } },
+          h('button', { 
+            className: 'btn btn-secondary', 
+            onClick: () => todo.setFilter('all'),
+            style: { marginRight: '8px' }
+          }, '全部'),
+          h('button', { 
+            className: 'btn btn-secondary', 
+            onClick: () => todo.setFilter('active'),
+            style: { marginRight: '8px' }
+          }, '进行中'),
+          h('button', { 
+            className: 'btn btn-secondary', 
+            onClick: () => todo.setFilter('completed')
+          }, '已完成')
+        ),
+        h('ul', { className: 'todo-list' },
+          each(() => todo.filteredItems, (item) =>
+            h('li', { 
+              className: `todo-item ${item.completed ? 'completed' : ''}`,
+              key: item.id
+            },
+              h('input', {
+                type: 'checkbox',
+                checked: item.completed,
+                onChange: () => todo.toggle(item.id)
+              }),
+              h('span', null, item.text),
+              h('button', {
+                className: 'delete-btn',
+                onClick: () => todo.remove(item.id)
+              }, '删除')
+            )
+          )
+        ),
+        h('div', { style: { marginTop: '16px', color: '#666' } },
+          () => `${todo.activeCount} 个待办未完成，${todo.completedCount} 个已完成`
+        )
+      )
+    }
+    
+    function FormApp() {
+      const form = createForm({
+        onSubmit: async (values) => {
+          alert('表单提交成功！\n' + JSON.stringify(values, null, 2))
+        }
+      })
+      
+      const nameField = createField({
+        label: '用户名',
+        required: true,
+        validators: [validators.minLength(3, '用户名至少3个字符')]
+      })
+      
+      const emailField = createField({
+        label: '邮箱',
+        required: true,
+        validators: [validators.email()]
+      })
+      
+      const passwordField = createField({
+        label: '密码',
+        required: true,
+        validators: [validators.minLength(6, '密码至少6个字符')]
+      })
+      
+      form.register('name', nameField)
+      form.register('email', emailField)
+      form.register('password', passwordField)
+      
+      return h('div', { className: 'card' },
+        h('h2', null, '表单验证示例'),
+        h('form', { onSubmit: form.handleSubmit },
+          h('div', { className: 'form-group' },
+            h('label', null, '用户名 *'),
+            h('input', {
+              type: 'text',
+              className: () => nameField.error() ? 'error' : '',
+              value: nameField.value(),
+              onInput: (e) => nameField.value.set(e.target.value),
+              onBlur: () => nameField.validate()
+            }),
+            show(nameField.error, [h('div', { className: 'error-message' }, nameField.error)])
+          ),
+          h('div', { className: 'form-group' },
+            h('label', null, '邮箱 *'),
+            h('input', {
+              type: 'email',
+              className: () => emailField.error() ? 'error' : '',
+              value: emailField.value(),
+              onInput: (e) => emailField.value.set(e.target.value),
+              onBlur: () => emailField.validate()
+            }),
+            show(emailField.error, [h('div', { className: 'error-message' }, emailField.error)])
+          ),
+          h('div', { className: 'form-group' },
+            h('label', null, '密码 *'),
+            h('input', {
+              type: 'password',
+              className: () => passwordField.error() ? 'error' : '',
+              value: passwordField.value(),
+              onInput: (e) => passwordField.value.set(e.target.value),
+              onBlur: () => passwordField.validate()
+            }),
+            show(passwordField.error, [h('div', { className: 'error-message' }, passwordField.error)])
+          ),
+          h('div', { style: { display: 'flex', gap: '10px' } },
+            h('button', {
+              type: 'submit',
+              className: 'btn btn-primary',
+              disabled: form.submitting()
+            }, form.submitting() ? '提交中...' : '提交'),
+            h('button', {
+              type: 'button',
+              className: 'btn btn-secondary',
+              onClick: form.reset
+            }, '重置')
+          )
+        )
+      )
+    }
+    
+    function App() {
+      return h('div', { className: 'container' },
+        h('h1', { style: { textAlign: 'center', marginBottom: '30px', color: '#333' } }, 'Rock.js 示例应用'),
+        CounterApp(),
+        TodoApp(),
+        FormApp()
+      )
+    }
+    
+    createApp(App, '#app')
+  </script>
+</body>
+</html>

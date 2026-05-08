@@ -1,0 +1,42 @@
+{
+  "name": "@field-js/core",
+  "version": "0.0.1",
+  "description": "表单优先的轻量级MVVM前端框架，原子级响应式，内置表单验证",
+  "main": "index.js",
+  "module": "index.js",
+  "type": "module",
+  "files": [
+    "*.js"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./signal": "./signal.js",
+    "./form": "./form.js",
+    "./component": "./component.js",
+    "./store": "./store.js",
+    "./router": "./router.js",
+    "./lifecycle": "./lifecycle.js",
+    "./directives": "./directives.js"
+  },
+  "keywords": [
+    "mvvm",
+    "frontend",
+    "framework",
+    "reactive",
+    "signal",
+    "form",
+    "validation",
+    "store",
+    "state-management",
+    "lightweight"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/field.js"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/field.js/issues"
+  },
+  "author": "Your Name",
+  "license": "MIT"
+}
